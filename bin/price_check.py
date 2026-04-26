@@ -349,7 +349,7 @@ def _normalize_item(raw: dict[str, Any], query: str = "") -> dict[str, Any]:
         "relevance": _title_relevance(query, title),
         "buy_url": None,                              # v0.3 enrich 后填（maishou 转链）
         "copy_cmd": None,                             # 同上（淘口令）
-        "search_url": _make_search_url(source, title), # v0.5.2 兜底：原生平台搜索
+        "search_url": _make_search_url(source, query),  # v0.5.4: 用用户 query 而非 maishou title
     }
 
 
@@ -744,7 +744,7 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
         "trap_warning": trap,
         "_meta": {
             "skill": "price-check",
-            "version": "0.5.3",
+            "version": "0.5.4",
             "history_provider": history_provider.name,
             "data_source": "internalized maishou88.com client (derived from shopmind-price-compare by xiaohaook)",
             "outlier_filter": f"price < raw_median × {OUTLIER_RATIO}",

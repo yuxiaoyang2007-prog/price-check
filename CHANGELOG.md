@@ -4,6 +4,12 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.4] — 2026-04-26
+
+### Fixed
+- **Critical bug fix for v0.5.3**: `_make_search_url(source, query)` was renamed to take a `query` argument, but the caller in `_normalize_item` was still passing `title`, so the generated search URLs in v0.5.3 had the same noise problem as v0.5.2 (used maishou's dirty item title instead of the user's clean query). v0.5.4 actually fixes the call site.
+- This is a textbook verification-before-completion miss — the function signature change was tested but the runtime output wasn't. v0.5.4 e2e test confirms `search_url?keyword=Mac+studio+M3+Ultra+256G+1T` (clean user query) instead of `?keyword=Apple%2F苹果AI电脑%2F...`.
+
 ## [0.5.3] — 2026-04-26
 
 ### Fixed
