@@ -9,7 +9,7 @@ metadata:
       bins: ["python3", "uv"]
 ---
 
-# price-check v0.6.0
+# price-check v0.6.1
 
 ## ⚠️ Agent 渲染硬规则（拿到 stdout JSON 时必读）
 

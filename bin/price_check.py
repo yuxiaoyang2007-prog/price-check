@@ -53,20 +53,42 @@ SEARCH_URL_TEMPLATES: dict[str, str] = {
 }
 
 
-def _make_search_url(source: Optional[str], query: Optional[str]) -> Optional[str]:
-    """根据 source + 用户原始 query 生成原生平台搜索 URL（兜底 maishou 转链不准）。
+def _normalize_query_for_search(query: str) -> str:
+    """清理用户 query 用于电商原生搜索。
 
-    v0.5.3 起改用用户原始 query 而非 maishou 给的 title —— 因为 title 含
-    "AI电脑"、"台式机"、"Z1CE001AH" 等 maishou 噪音，加上括号/+号会被搜索
-    引擎按字面切词稀释。用户原始 query 干净精炼，京东/淘宝原生搜索能直接命中。
+    去掉规格描述词（"内存"/"硬盘"/"存储"/"主存"/"固态硬盘" 等）—— 中文电商
+    搜索引擎会按字面拉这些高权重词的相关结果，导致搜偏（搜"Mac Studio
+    256G 内存 1T 硬盘"会拉来内存条 + 硬盘，而不是 Mac Studio）。
+    """
+    if not query:
+        return query
+    # 噪声词：用户描述商品规格时常用，但搜索引擎会按字面拉配件结果
+    noise_terms = [
+        "内存", "存储", "主存", "运行内存",
+        "硬盘", "固态硬盘", "机械硬盘", "SSD", "ssd",
+        "屏幕", "显示器",  # "Mac mini 24 寸 屏幕" 这种描述
+    ]
+    cleaned = query
+    for term in noise_terms:
+        cleaned = cleaned.replace(term, " ")
+    # 折叠连续空格
+    cleaned = " ".join(cleaned.split())
+    return cleaned or query
+
+
+def _make_search_url(source: Optional[str], query: Optional[str]) -> Optional[str]:
+    """根据 source + 用户原始 query 生成原生平台搜索 URL。
+
+    v0.6.1: 在生成 URL 前先用 _normalize_query_for_search 清理 query 里的
+    规格描述词（内存 / 硬盘 等），避免电商原生搜索按字面分词搜偏。
     """
     if not source or not query:
         return None
     template = SEARCH_URL_TEMPLATES.get(str(source))
     if not template:
         return None
-    # safe="" 强制 encode 所有特殊字符（默认 safe='/' 会留下斜杠）
-    return template.format(kw=quote(query, safe=""))
+    cleaned = _normalize_query_for_search(query)
+    return template.format(kw=quote(cleaned, safe=""))
 
 
 # ---------- HistoryProvider plugin interface ----------
@@ -707,25 +729,20 @@ def _render_human_report(result: dict[str, Any]) -> str:
     else:
         lines.extend(["   （信任层 + 相关性层全过滤后无可信候选）", ""])
 
-    # Top 3 候选
+    # Top 3 候选 — v0.6.1: 改用纯文本列表（飞书 markdown table 渲染长 URL 会串行）
     lines.append("📊 全网前 3 名候选（已三层过滤）")
     if safe:
         lines.append("")
-        lines.append("| # | 价格 | 平台 | 店铺 | SKU |")
-        lines.append("|---|------|------|------|-----|")
         for i, item in enumerate(safe[:3], 1):
             shop = item.get("shopName") or "-"
             trusted = " ✓" if item.get("is_trusted_shop") else ""
-            title_short = (item.get("title") or "")[:40]
-            lines.append(
-                f"| {i} | ¥{item.get('price','?')} | {item.get('platform','')} | {shop}{trusted} | {title_short} |"
-            )
-        # Top 3 的搜索链接（每条单独列出）
-        for i, item in enumerate(safe[:3], 1):
-            search_url = item.get("search_url")
+            title_short = (item.get("title") or "")[:50]
+            search_url = item.get("search_url") or ""
+            lines.append(f"  [{i}] ¥{item.get('price','?')} | {item.get('platform','')} / {shop}{trusted}")
+            lines.append(f"      {title_short}")
             if search_url:
-                lines.append(f"  Top{i} 搜索: {search_url}")
-        lines.append("")
+                lines.append(f"      🔍 {search_url}")
+            lines.append("")
     else:
         lines.extend(["   无安全候选", ""])
 
@@ -850,7 +867,7 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
         "trap_warning": trap,
         "_meta": {
             "skill": "price-check",
-            "version": "0.6.0",
+            "version": "0.6.1",
             "history_provider": history_provider.name,
             "data_source": "internalized maishou88.com client (derived from shopmind-price-compare by xiaohaook)",
             "outlier_filter": f"price < raw_median × {OUTLIER_RATIO}",

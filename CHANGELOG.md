@@ -4,6 +4,19 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] — 2026-04-26
+
+### Fixed
+- **search_url 不再被规格词搜偏**：`_normalize_query_for_search()` 去除 query 里的"内存""硬盘""存储""主存""SSD""屏幕""显示器" 等规格描述词。用户问 "Mac Studio 256G 内存 1T 硬盘" 时，京东原生搜索 keyword 现在是 "Mac Studio 256G 1T"（之前会带"内存""硬盘"两词，被电商分词当配件搜偏）。
+- **飞书 Top 3 表格不再串行**：`_render_human_report()` 把候选列表从 markdown table 改成纯文本格式（一条候选 3 行：价格店铺/标题/搜索链接），避免飞书消息渲染长 URL 在 table 里挤压成单列。
+
+### Why this exists
+User shipped v0.6.0 + flagged two issues:
+1. JD search_url for "Mac Studio M3 Ultra 256G 内存 1T 硬盘" returned mostly memory sticks + hard drives (Chinese e-commerce engine literally tokenizing 内存/硬盘 as accessories).
+2. Feishu rendered the markdown candidate table with all Top 1/2/3 search URLs squashed into the first column — visual mess.
+
+Both fixed in this patch. No schema/break change vs v0.6.0.
+
 ## [0.6.0] — 2026-04-26 — BREAK CHANGE
 
 ### Why this exists
