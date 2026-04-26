@@ -1,0 +1,53 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint (ruff check)
+        run: ruff check bin/ --output-format=github
+      - name: Format check
+        run: ruff format --check bin/
+
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile-check all Python files
+        run: |
+          for f in bin/*.py; do
+            python -m py_compile "$f" || exit 1
+          done
+          echo "All bin/*.py compiled OK"
+
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify required files exist
+        run: |
+          test -f SKILL.md || (echo "missing SKILL.md" && exit 1)
+          test -f config.example.json || (echo "missing config.example.json" && exit 1)
+          test -f bin/price_check.py || (echo "missing bin/price_check.py" && exit 1)
+          test -f references/report-template.md || (echo "missing references/report-template.md" && exit 1)
+          test -f LICENSE || (echo "missing LICENSE" && exit 1)
+          echo "All required files present"
+      - name: Validate config.example.json is valid JSON
+        run: python -c "import json; json.load(open('config.example.json'))"
