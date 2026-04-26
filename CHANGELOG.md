@@ -4,6 +4,18 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.2] — 2026-04-26
+
+### Fixed
+- **`stats` 现在反映"真正相关的候选"分布**（去 outlier + 去 flagged + 去 low_relevance），不再把"标题不匹配的噪音商品"算进市场中位数。
+  - 之前 v0.6.1：query "Mac Studio M3 Ultra 256G 内存 1T 硬盘" 召回 36 条 → maishou 把"内存""硬盘"当独立关键词分流，召回 22 条内存条/硬盘 → stats.median = ¥1004 → verdict 变成 "再等等 高于中位数 3962.6%"（实际 best_deal ¥40799 是真 Mac Studio 自营货）
+  - 现在：stats 用 relevant_items（4 条真 Mac Studio）→ stats.median ≈ ¥45000 → verdict 准确
+- 影响：`stats.count` 数值变小（只算相关候选），verdict_reason 里的 "N 平台中位数" 现在更精准
+- `stats_raw` 不变，仍含原始全部 items（透明度）
+
+### Why
+v0.6.1 修了 search_url 用规范化 query 这层，但 maishou 召回层用的还是用户原 query（含"内存""硬盘"），所以召回结果里仍混入大量配件。verdict 算市场中位数时该把这些噪音排除，就像 best_deal 选择时排除一样 —— 两者比较基准必须一致。
+
 ## [0.6.1] — 2026-04-26
 
 ### Fixed

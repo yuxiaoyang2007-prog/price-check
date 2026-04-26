@@ -812,7 +812,6 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
     stats_raw = _price_stats(items)
 
     clean_items, removed, threshold = _filter_outliers(items)
-    stats = _price_stats(clean_items)
 
     history_provider: HistoryProvider = _make_history_provider()
 
@@ -823,6 +822,7 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
     if not items:
         verdict, verdict_reason = "无数据", "shopmind 未返回任何商品记录"
         history = None
+        stats = _price_stats(clean_items)  # 空 stats
     elif removed and len(clean_items) < MIN_CLEAN:
         verdict = "数据噪音过多，无法判断"
         verdict_reason = (
@@ -835,8 +835,20 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
             if i["relevance"]["score"] < RELEVANCE_THRESHOLD or i["relevance"]["ambiguous"]
         ]
         history = None
+        stats = _price_stats(clean_items)
     else:
         best_deal, flagged, low_relevance = _select_best_deal(clean_items)
+        # v0.6.2: stats 改成"真正相关的候选"分布（去 outlier + 去 flagged + 去 low_relevance）
+        # 之前 stats = clean_items 含大量 low_relevance 噪音商品（query "Mac Studio 256G 内存
+        # 1T 硬盘" 召回的内存条 / 硬盘等），导致 verdict_reason 出现 "高于中位数 3962%" 这种
+        # 离谱数字。现在 stats.median 真实反映目标 SKU 的市场分布。
+        flagged_ids = {i["goodsId"] for i in flagged}
+        low_rel_ids = {i["goodsId"] for i in low_relevance}
+        relevant_items = [
+            i for i in clean_items
+            if i["goodsId"] not in flagged_ids and i["goodsId"] not in low_rel_ids
+        ]
+        stats = _price_stats(relevant_items)
         # v0.4: 在 best_deal 已知后才查 history（含 best_deal 自己的历史）
         history = history_provider.get_history(query, best_deal=best_deal)
         verdict, verdict_reason = compute_verdict(best_deal, stats, history)
@@ -867,7 +879,7 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
         "trap_warning": trap,
         "_meta": {
             "skill": "price-check",
-            "version": "0.6.1",
+            "version": "0.6.2",
             "history_provider": history_provider.name,
             "data_source": "internalized maishou88.com client (derived from shopmind-price-compare by xiaohaook)",
             "outlier_filter": f"price < raw_median × {OUTLIER_RATIO}",
