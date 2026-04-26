@@ -9,7 +9,7 @@ metadata:
       bins: ["python3", "uv"]
 ---
 
-# price-check v0.4.1
+# price-check v0.5.0
 
 ## 安装即用，飞书同步完全可选
 
@@ -204,17 +204,14 @@ stdout 是单个 JSON 对象（含 best_deal.buy_url + Top 候选 buy_url）。a
 
 > **设计要点**：verdict 用 `best_deal.price`（已过 condition + relevance + trust 三层筛选）而不是 `stats.min`。stats.min 可能是配件、翻新机、不相关 SKU；best_deal 才是"真正能买的可信全新国行/水货的最便宜款"。verdict_reason 末尾必带 `匹配度 X%`，提醒 SKU 接近度。
 
-## 上游依赖
+## 数据层
 
-| 依赖 | 用法 | 改动它? |
-|------|-----|--------|
-| `shopmind-price-compare` | `importlib` 加载 `scripts/main.py`，调 `_fetch_search_items()` 拿 to-string 之前的原始 items；复用 HEADERS / PLATFORM_MAP 常量 | **2026-04-26 已改造**：拆出 `_fetch_search_items()` helper + 给 `search` 加 `--format json`；CLI 向后兼容 |
-| `manmanbuy` | ClawHub v0.1.0 是空壳（无 bin/scripts），**v0.1 不调用**。v0.2 历史价数据源仍待选型。| 不接 |
+v0.5 起数据层**自包含**在 `bin/_data_layer.py`，不再依赖外部 skill。该文件是 `maishou88.com` 公共 API 的薄客户端，HTTP endpoints / OPENID 种子 / items 构造逻辑**衍生自** [shopmind-price-compare v2.2.0](https://clawhub.ai/skills/shopmind-price-compare)（作者 [xiaohaook](https://clawhub.ai/users/xiaohaook)）—— 完整归属信息见 `_data_layer.py` 顶部 + `README.md → Acknowledgements`。
 
 ## 已知限制
 
 1. **历史价完全缺位**（v0.3 接入慢慢买自爬 / 京东价保 API）：v0.2 verdict 仅基于"当下 N 平台分布"，碰到全网同步涨价的场景会判错。HistoryProvider 已留 swap-in 点。
-2. **best_deal.url 为 null**：v0.2 没并发拉 shopmind detail。需要购买链接时上层 agent 手动调 `shopmind-price-compare detail --source X --id Y`。
+2. **best_deal.url** 已自动 enrich（v0.3 起）；如果有日并发限流问题 v0.6 会改回按需拉取。
 3. **剔除阈值 0.3 是定值**：对 3C/家电正常工作，但极端价格分散（如收藏品/手办 ¥10–¥50000）可能误剔。v0.3 接入历史价后这个阈值可以放松或动态化。
 4. **condition 词典是启发式**：会有偶发误判 —— "全新激活试用"误命中 `activation_questionable`；"宠物除螨仪"可能误命中 `accessory`（实际可能是带除螨头的吸尘器主机）。词典在 `bin/price_check.py:CONDITION_RULES` 可调。
 5. **运营商京东自营当 trusted**：中国联通 / 移动 / 电信京东自营旗舰店合约机风险偏高但当前算 trusted_shop。v0.3 计划单独给运营商专卖店一档。

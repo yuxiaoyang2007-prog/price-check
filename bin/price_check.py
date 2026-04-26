@@ -4,24 +4,17 @@
 # dependencies = ["aiohttp"]
 # ///
 """
-price-check v0.3.0 — 比价 + verdict + 购买链接 一体化 wrapper
+price-check v0.5.0 — 比价 + verdict + 购买链接 一体化（自包含数据层）
 
-升级点（vs v0.2）：
-- A: best_deal 自动并发拉真实购买链接 / 淘口令
-- B: Top 3 安全候选也并发拉链接
-- C: 报告"导购优先"重组 —— 价格速览表前置，verdict 退居底部
-- D: SQLite 持久化（~/.openclaw/data/price-check/price-check.db）
-     + 30min query cache + 历史价快照（v0.4 HistoryProvider 接入数据源）
-- E: 飞书多维表格同步（opt-in，跑 setup_feishu.py 启用）
-
-数据层：复用 shopmind-price-compare._fetch_search_items() + _fetch_goods_detail()
-verdict / condition / relevance 三层过滤逻辑沿用 v0.2，未变。
+vs v0.4.1：
+- F: 数据层从 shopmind-price-compare 内化进来（bin/_data_layer.py）
+     不再依赖 shopmind 上游 skill；用户安装 price-check 即可，无需额外依赖
+     上游归属信息保留在 _data_layer.py 顶部 + README Acknowledgements
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib.util
 import json
 import re
 import statistics
@@ -36,39 +29,12 @@ import aiohttp
 _BIN_DIR = Path(__file__).parent
 sys.path.insert(0, str(_BIN_DIR))
 
-import db          # noqa: E402
-import feishu_sync # noqa: E402
+import _data_layer as data_layer  # noqa: E402  内化的 maishou88.com API client
+import db                          # noqa: E402
+import feishu_sync                 # noqa: E402
 
-
-# ---------- shopmind primitives ----------
-SHOPMIND_PATH = (
-    Path.home()
-    / ".openclaw"
-    / "workspace"
-    / "skills"
-    / "shopmind-price-compare"
-    / "scripts"
-    / "main.py"
-)
-
-
-def _load_shopmind():
-    if not SHOPMIND_PATH.exists():
-        sys.exit(
-            f"❌ 未找到 shopmind-price-compare 上游脚本：{SHOPMIND_PATH}\n"
-            "   先跑 `openclaw skills install shopmind-price-compare` 再来。"
-        )
-    spec = importlib.util.spec_from_file_location("shopmind_main", SHOPMIND_PATH)
-    if spec is None or spec.loader is None:
-        sys.exit(f"❌ 无法解析 shopmind 模块：{SHOPMIND_PATH}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-shopmind = _load_shopmind()
-HEADERS = shopmind.HEADERS
-PLATFORM_MAP = shopmind.PLATFORM_MAP
+HEADERS = data_layer.HEADERS
+PLATFORM_MAP = data_layer.PLATFORM_MAP
 
 
 # ---------- HistoryProvider plugin interface ----------
@@ -306,28 +272,25 @@ async def fetch_items(
     keyword: str, source: str = "0", page: int = 1
 ) -> list[dict[str, Any]]:
     async with aiohttp.ClientSession(headers=HEADERS) as session:
-        shopmind.SESSION = session
-        result = await shopmind._fetch_search_items(keyword, source=source, page=page)
+        result = await data_layer.fetch_search_items(session, keyword, source=source, page=page)
     raw_items = result.get("items") or []
     return [_normalize_item(it, query=keyword) for it in raw_items]
 
 
 async def _enrich_with_urls(targets: list[dict[str, Any]]) -> None:
-    """并发拉 detail，把 buy_url / copy_cmd 塞进 target dict（in-place）。
-    targets 是 dict 列表，每个含 goodsId + source。"""
+    """并发拉 detail，把 buy_url / copy_cmd 塞进 target dict（in-place）。"""
     if not targets:
         return
 
     async with aiohttp.ClientSession(headers=HEADERS) as session:
-        shopmind.SESSION = session
-
         async def _one(t: dict[str, Any]) -> None:
             try:
-                d = await shopmind._fetch_goods_detail(t.get("goodsId"), source=t.get("source", "1"))
+                d = await data_layer.fetch_goods_detail(
+                    session, t.get("goodsId"), source=t.get("source", "1"),
+                )
                 t["buy_url"] = d.get("buy_url") or None
                 t["copy_cmd"] = d.get("copy_cmd") or None
             except Exception as e:
-                # 拉失败不阻塞，url 留 null
                 print(f"[price-check] _enrich_with_urls failed for {t.get('goodsId')}: {e}",
                       file=sys.stderr)
                 t.setdefault("buy_url", None)
@@ -753,9 +716,9 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
         "trap_warning": trap,
         "_meta": {
             "skill": "price-check",
-            "version": "0.3.0",
+            "version": "0.5.0",
             "history_provider": history_provider.name,
-            "data_source": "shopmind-price-compare._fetch_search_items() + _fetch_goods_detail()",
+            "data_source": "internalized maishou88.com client (derived from shopmind-price-compare by xiaohaook)",
             "outlier_filter": f"price < raw_median × {OUTLIER_RATIO}",
             "min_clean_samples": MIN_CLEAN,
             "relevance_threshold": RELEVANCE_THRESHOLD,

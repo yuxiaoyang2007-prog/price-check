@@ -46,8 +46,9 @@ Bot renders human report (6-section "C-mode": warning / best_deal+link / Top 3 t
 ## Requirements
 
 - **Required**: `python3` ≥ 3.10, `uv` (auto-handled by OpenClaw skill metadata)
-- **Required upstream**: [shopmind-price-compare](https://clawhub.com/skills/shopmind-price-compare) skill (for live data)
 - **Optional**: `lark-cli` (only when you enable Feishu Bitable sync)
+
+> v0.5+ is **self-contained** — no external skill dependencies. The `maishou88.com` data-layer client lives in `bin/_data_layer.py`, derived from [shopmind-price-compare](https://clawhub.ai/skills/shopmind-price-compare). See Acknowledgements.
 
 ## Installation
 
@@ -155,5 +156,11 @@ MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgements
 
-- Upstream data layer: [shopmind-price-compare](https://clawhub.com/skills/shopmind-price-compare) — the live-data crawler that price-check wraps
+The **`maishou88.com` data-layer client** (`bin/_data_layer.py`) is **derived from** [shopmind-price-compare v2.2.0](https://clawhub.ai/skills/shopmind-price-compare) by **[xiaohaook](https://clawhub.ai/users/xiaohaook)**. Specifically the HTTP endpoints, request shape, default headers, OPENID seed, and item-construction logic are reused; all credit to the original author.
+
+We chose to internalize this layer (rather than depend on shopmind as a separate skill) so that `price-check` is self-contained — users only install one skill. If the upstream author objects we will switch to a clean-room reimplementation.
+
+Other:
+
 - Hosting platform: [OpenClaw](https://openclaw.ai/) — the agent runtime
+- Inspired by [manmanbuy](https://www.manmanbuy.com/) for the historical-price idea

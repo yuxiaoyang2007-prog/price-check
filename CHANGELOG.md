@@ -4,6 +4,16 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] — 2026-04-26
+
+### Changed
+- **Self-contained data layer** — the `maishou88.com` API client (HTTP endpoints / OPENID / items construction) was internalized into `bin/_data_layer.py`, derived from [shopmind-price-compare v2.2.0](https://clawhub.ai/skills/shopmind-price-compare) by **xiaohaook**. price-check no longer depends on the upstream `shopmind-price-compare` skill being installed alongside it. Users only install one skill now.
+- Attribution preserved: `_data_layer.py` header + `README.md → Acknowledgements` + `SKILL.md → 数据层` section all credit the original author.
+
+### Removed
+- Removed `_load_shopmind()` + `importlib.util.spec_from_file_location` machinery — no longer needed.
+- Removed "requires shopmind-price-compare" from SKILL.md and README.
+
 ## [0.4.1] — 2026-04-26
 
 ### Changed

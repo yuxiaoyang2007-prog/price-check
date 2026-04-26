@@ -46,8 +46,9 @@ Bot 渲染 6 段报告（C 模式：警告 / best_deal+链接 / Top 3 表 / 历�
 ## 依赖
 
 - **必须**：`python3` ≥ 3.10、`uv`（OpenClaw skill metadata 自动处理）
-- **必须的上游 skill**：[shopmind-price-compare](https://clawhub.com/skills/shopmind-price-compare)（数据来源）
 - **可选**：`lark-cli`（只在启用飞书同步时需要）
+
+> v0.5+ **自包含**，不依赖任何外部 skill。`maishou88.com` 数据层客户端在 `bin/_data_layer.py`，衍生自 [shopmind-price-compare](https://clawhub.ai/skills/shopmind-price-compare) —— 详见 致谢段。
 
 ## 安装
 
@@ -155,5 +156,11 @@ MIT —— 详见 [LICENSE](LICENSE)。
 
 ## 致谢
 
-- 上游数据层：[shopmind-price-compare](https://clawhub.com/skills/shopmind-price-compare) —— price-check 包装的实时数据爬虫
+**`maishou88.com` 数据层客户端**（`bin/_data_layer.py`）**衍生自** [shopmind-price-compare v2.2.0](https://clawhub.ai/skills/shopmind-price-compare)，作者 **[xiaohaook](https://clawhub.ai/users/xiaohaook)**。具体 HTTP 端点、请求体格式、默认 headers、OPENID 种子、items 构造逻辑均复用自上游 —— 全部归功原作者。
+
+我们选择内化该数据层（而非把 shopmind 作为独立 skill 依赖），是为了让 `price-check` 自包含——用户只需装一个 skill。**如果原作者对此有异议，我们会立即改成 clean-room 重写**。
+
+其他：
+
 - 运行平台：[OpenClaw](https://openclaw.ai/) —— agent runtime
+- 历史价灵感来自 [慢慢买](https://www.manmanbuy.com/)
