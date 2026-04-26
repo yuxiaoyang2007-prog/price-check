@@ -4,6 +4,20 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.2] — 2026-04-26
+
+### Added
+- **`search_url` fallback field on every item** — when the `maishou` short-link is inaccurate (most commonly for special-channel SKUs like education-discount Mac Studios, enterprise-only iPhones, employee-only listings, where the JD/Taobao affiliate redirect lands on the store homepage or a similar SKU instead of the exact item), the `search_url` provides a native-platform search URL using the item's title, so users can reliably find the exact product.
+- Native search URL templates for: Taobao/Tmall (source 1), JD (2), PDD (3), 1688 (10). Other platforms (Suning/Vipshop/Kaola/Douyin/Kuaishou) get `search_url = null` because their web search UX is poor.
+- `best_deal` now carries the `search_url` from the underlying item.
+
+### Changed
+- `references/report-template.md` updated: when `search_url` is non-null, agents must show it as a fallback link with a one-line note about why (`"教育款 / 企业专享等特殊渠道商品转链可能不准，用此兜底"`).
+- Agent tip #3 strengthened to require showing both `buy_url` and `search_url`.
+
+### Why
+User reported that `best_deal.buy_url` for "Mac Studio M3 Ultra 256G 1T 教育优惠" returned a JD short-link (`u.jd.com/...`) that didn't lead to the exact education-discount SKU. Investigation revealed maishou's `goodsId → JD SKU` mapping is fragile for special-channel products (education / enterprise / member-only). Native search by title is a robust fallback for these cases.
+
 ## [0.5.1] — 2026-04-26
 
 ### Changed (docs only)

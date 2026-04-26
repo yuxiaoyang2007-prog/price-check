@@ -4,12 +4,13 @@
 # dependencies = ["aiohttp"]
 # ///
 """
-price-check v0.5.0 — 比价 + verdict + 购买链接 一体化（自包含数据层）
+price-check v0.5.2 — 比价 + verdict + 购买链接（含 search_url fallback）
 
-vs v0.4.1：
-- F: 数据层从 shopmind-price-compare 内化进来（bin/_data_layer.py）
-     不再依赖 shopmind 上游 skill；用户安装 price-check 即可，无需额外依赖
-     上游归属信息保留在 _data_layer.py 顶部 + README Acknowledgements
+vs v0.5.1：
+- v0.5.2 每个 item 增加 `search_url` 字段：当 maishou 中转短链不准时，
+  用 title 调原生平台搜索作为兜底（淘宝/京东/拼多多/1688）。
+  教育优惠款 / 企业专享款这类联盟分销弱的商品，maishou 短链可能错指
+  到首页或类似 SKU，search_url 让用户能可靠找到目标商品。
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
 import aiohttp
 
@@ -35,6 +37,26 @@ import feishu_sync                 # noqa: E402
 
 HEADERS = data_layer.HEADERS
 PLATFORM_MAP = data_layer.PLATFORM_MAP
+
+# v0.5.2: 各平台原生搜索 URL 模板（用商品 title 兜底，防 maishou 转链不准）
+SEARCH_URL_TEMPLATES: dict[str, str] = {
+    "1": "https://s.taobao.com/search?q={kw}",                   # 淘宝/天猫
+    "2": "https://search.jd.com/Search?keyword={kw}",            # 京东
+    "3": "https://mobile.yangkeduo.com/search_result.html?search_key={kw}",  # 拼多多
+    "10": "https://s.1688.com/selloffer/offer_search.htm?keywords={kw}",     # 1688
+    # 抖音/快手/苏宁/唯品会/考拉 web 搜索体验差，留 None 让 agent 自行决定
+}
+
+
+def _make_search_url(source: Optional[str], title: Optional[str]) -> Optional[str]:
+    """根据 source + title 生成原生平台搜索 URL（兜底 maishou 转链不准的场景）。"""
+    if not source or not title:
+        return None
+    template = SEARCH_URL_TEMPLATES.get(str(source))
+    if not template:
+        return None
+    # title 截前 50 字符避免 URL 过长，URL-encode
+    return template.format(kw=quote(title[:50]))
 
 
 # ---------- HistoryProvider plugin interface ----------
@@ -300,11 +322,12 @@ async def _enrich_with_urls(targets: list[dict[str, Any]]) -> None:
 def _normalize_item(raw: dict[str, Any], query: str = "") -> dict[str, Any]:
     title = raw.get("title") or ""
     shop_name = raw.get("shopName") or ""
+    source = str(raw.get("source"))
     cond_hits = _condition_hits(title)
     return {
         "goodsId": raw.get("goodsId"),
-        "source": str(raw.get("source")),
-        "platform": raw.get("sourceName") or PLATFORM_MAP.get(str(raw.get("source")), "未知"),
+        "source": source,
+        "platform": raw.get("sourceName") or PLATFORM_MAP.get(source, "未知"),
         "title": title,
         "shopName": shop_name,
         "originalPrice": float(raw.get("originalPrice") or 0),
@@ -319,8 +342,9 @@ def _normalize_item(raw: dict[str, Any], query: str = "") -> dict[str, Any]:
         "condition_hits": cond_hits,
         "is_trusted_shop": _is_trusted_shop(shop_name),
         "relevance": _title_relevance(query, title),
-        "buy_url": None,    # v0.3 enrich 后填
-        "copy_cmd": None,   # 同上
+        "buy_url": None,                              # v0.3 enrich 后填（maishou 转链）
+        "copy_cmd": None,                             # 同上（淘口令）
+        "search_url": _make_search_url(source, title), # v0.5.2 兜底：原生平台搜索
     }
 
 
@@ -466,9 +490,10 @@ def _select_best_deal(
                     "relevance": best["relevance"],
                     "goodsId": best["goodsId"],
                     "source": best["source"],
-                    "buy_url": None,    # v0.3 enrich 后填
+                    "buy_url": None,                # v0.3 enrich 后填
                     "copy_cmd": None,
-                    "url": None,         # 兼容旧字段名
+                    "search_url": best.get("search_url"),  # v0.5.2 原生搜索兜底
+                    "url": None,                     # 兼容旧字段名
                 },
                 flagged,
                 low_relevance,
@@ -714,7 +739,7 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
         "trap_warning": trap,
         "_meta": {
             "skill": "price-check",
-            "version": "0.5.1",
+            "version": "0.5.2",
             "history_provider": history_provider.name,
             "data_source": "internalized maishou88.com client (derived from shopmind-price-compare by xiaohaook)",
             "outlier_filter": f"price < raw_median × {OUTLIER_RATIO}",
