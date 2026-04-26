@@ -4,6 +4,16 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.1] — 2026-04-26
+
+### Changed (docs only)
+- **Reframed skill positioning around user value**, not implementation. SKILL.md description / README intros / SKILL.md "what it does for you" section now lead with three concrete user-facing capabilities:
+  1. Search lowest price across China's major e-commerce platforms (Taobao/Tmall, JD, PDD, Suning, Vipshop, Kaola, Douyin, Kuaishou, 1688)
+  2. Tell whether to buy with a clear verdict + concrete evidence + clickable buy links
+  3. Monitor historical prices locally (catches "fake-discount" rise-then-fall traps)
+- Implementation details (three-layer filter, condition dictionary, etc.) moved to "How it actually works" subsections — no longer the lead.
+- No code changes; bumping `_meta.version` from 0.5.0 → 0.5.1 to keep schema consistent.
+
 ## [0.5.0] — 2026-04-26
 
 ### Changed

@@ -2,20 +2,26 @@
 
 > 中文文档: [README.zh-CN.md](README.zh-CN.md)
 
-An [OpenClaw](https://openclaw.ai/) skill that combines **price comparison + verdict + buy links + local price history** into one tool. Works as a shopping assistant in Feishu (Lark) chat through your OpenClaw bot — ask "is iPhone 17 Pro 256G worth buying now?" and get a complete report with comparison table, direct purchase links, and a buy/wait verdict.
+An [OpenClaw](https://openclaw.ai/) skill that does **three things** to make your online shopping decisions easier:
 
-## Features
+1. **Search the lowest price across China's major e-commerce platforms** — Taobao/Tmall, JD, PDD, Suning, Vipshop, Kaola, Douyin, Kuaishou, 1688 — in a single query. Accessories, refurbished items, bundles, suspicious activation listings, and irrelevant SKUs are filtered out automatically; you only see **trustworthy purchase candidates**.
+2. **Tell you whether to buy now** — not just a price list, but a clear verdict (`Strongly Recommend / Buy / Wait / Insufficient Data`) backed by concrete evidence ("Best trustworthy price ¥X, K% below median of N platforms"), with **directly clickable purchase links** (Taobao share codes / JD short URLs) auto-fetched.
+3. **Monitor historical prices** — every query writes a local SQLite snapshot; after **a few queries on the same product**, the skill automatically activates "this item historical low ¥X / high ¥Y / currently at low/mid/high position" detection, and can catch "fake-discount" pricing traps.
 
-- **Multi-platform price comparison** — pulls live data from 22+ Chinese e-commerce platforms (Taobao/Tmall, JD, PDD, Suning, Vipshop, Kaola, Douyin, Kuaishou, 1688) via the upstream [shopmind-price-compare](https://clawhub.com/skills/shopmind-price-compare) skill
-- **Three-layer filtering** that strips noise before deciding:
+Optional: sync every query to a Feishu Bitable for cross-device browsing + "marked as purchased" tracking.
+
+Ask your OpenClaw bot in chat: *"Is iPhone 17 Pro 256G worth buying right now? Where's the cheapest?"* — and get a complete 6-section report with comparison table, direct purchase links, and a buy/wait recommendation.
+
+## How it actually works under the hood
+
+- **Multi-platform live price fetch** — pulls 22+ candidates per query from `maishou88.com` (built-in client; no separate skill dependency since v0.5)
+- **Three-layer noise filtering** that strips junk before any verdict is made:
   1. **Price layer** — drops bottom-quartile outliers (`price < raw_median × 0.3`) such as accessories, cables, screen protectors
-  2. **Trust layer** — flags items with seven `condition` categories (refurbished / bundle / accessory / activation_questionable / parallel_import / trusted_domestic / unknown) and shop trust score (Apple official store / JD self-operated / brand flagship)
-  3. **Relevance layer** — title token-match scoring (G ↔ GB equivalence), drops items with relevance score < 0.75 or ambiguous multi-model titles ("V8 V10 V11 V12 V15" listings)
-- **Verdict engine** — `Strongly Recommend / Buy / Wait / Don't Buy / Insufficient Data` based on `best_deal.price` vs market median, with auto-promotion when historical low
-- **Auto-fetched purchase URLs + Taobao share codes** for `best_deal` and Top 3 candidates — no extra clicks needed
-- **Local SQLite price history** — every query persists snapshots; after the same query runs ≥3 times, the verdict can reference "this product's historical low/high/avg" and detect trap pricing
-- **Optional Feishu Bitable sync** — write each query result to a Feishu multi-dimensional table (31 columns including history fields), browse historical decisions and click purchase links from Feishu mobile/desktop
-- **Zero-config by default** — install and run; Feishu sync is fully opt-in (off by default, runs without lark-cli)
+  2. **Trust layer** — categorizes items into 7 `condition` types (refurbished / bundle / accessory / activation_questionable / parallel_import / trusted_domestic / unknown) and scores shop trust (Apple official store / JD self-operated / brand flagship)
+  3. **Relevance layer** — title token-match scoring (with G ↔ GB equivalence); drops items below 0.75 score or with ambiguous multi-model titles ("V8 V10 V11 V12 V15" listings)
+- **Verdict engine** — promotes "Buy" to "Strongly Recommend" when current price is at historical low; demotes to "Don't Buy" if a "rise-then-fall" pattern is detected
+- **Local-first history** — no external dependency; the more you use it, the smarter it gets at recognizing your shopping patterns
+- **Zero-config defaults** — install, run, done. Feishu sync is fully opt-in (off by default; never touches lark-cli unless you explicitly enable it)
 
 ## Architecture
 
