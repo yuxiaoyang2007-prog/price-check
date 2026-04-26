@@ -1,6 +1,7 @@
 ---
 name: price-check
 description: "导购 + 比价 + verdict + 购买链接 一体化工具：调用 shopmind 拿全网比价数据，按价格分布 + 标题相关性 + 店铺信任度三层过滤，自动拉取 best_deal + Top 3 真实购买链接（淘宝淘口令/京东 URL），给出'强烈推荐/可以买/再等等/数据质量不足'判断。v0.3 加 SQLite 持久化（30min 缓存 + 历史价快照）+ 飞书多维表格同步（opt-in）。Keywords: 比价, 值不值得买, 哪里买, 哪里最便宜, 历史价, 套路价, 哪个平台最便宜, X 链接给我, 比价工具, price compare, 慢慢买, X 平台最便宜, 这个东西多少钱, 当前价合理吗, 购买链接, 淘口令"
+homepage: https://github.com/yuxiaoyang2007-prog/price-check
 metadata:
   openclaw:
     emoji: "💰"
