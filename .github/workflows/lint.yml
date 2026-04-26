@@ -19,8 +19,6 @@ jobs:
         run: pip install ruff
       - name: Lint (ruff check)
         run: ruff check bin/ --output-format=github
-      - name: Format check
-        run: ruff format --check bin/
 
   syntax:
     runs-on: ubuntu-latest

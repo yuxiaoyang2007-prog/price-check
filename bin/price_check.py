@@ -202,9 +202,7 @@ class LocalDBHistoryProvider(HistoryProvider):
         # 当前价仍接近或高于均价（没真降）
         if current_price < avg * 1.05:
             return None
-        # 峰值在最近 14 天
-        # 注：date 格式是 SQLite "YYYY-MM-DD HH:MM:SS"，简化用字符串比较
-        recent_count = sum(1 for s in series[-3:])
+        # 峰值必须在最近几个 snapshot 里（"近期"刚涨）
         if max_idx < len(series) - 3:
             return None
 

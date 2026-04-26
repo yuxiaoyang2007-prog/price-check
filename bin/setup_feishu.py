@@ -200,7 +200,7 @@ def main() -> None:
     print("✅ 飞书同步已启用")
     print(f"   base: {base_token}")
     print(f"   table: {table_id}")
-    print(f"   下次跑 price-check 会自动同步到飞书表格")
+    print("   下次跑 price-check 会自动同步到飞书表格")
     print()
     print("如需关闭：编辑 config.json 把 feishu_sync.enabled 改成 false")
 
