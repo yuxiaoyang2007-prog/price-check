@@ -777,10 +777,25 @@ def _render_human_report(result: dict[str, Any]) -> str:
     lines.append("⚠️ 透明度")
     if trap:
         lines.append(f"   {trap}")
-    lines.append(
-        f"   数据来源：{stats_raw.get('count','?')} 平台原始召回；"
-        f"剔除 {len(removed)} 条噪音 / 过滤 {len(flagged)} 条状态可疑 / 过滤 {len(low_rel)} 条标题不匹配"
+    raw_count = stats_raw.get("count", "?")
+    filter_summary = (
+        f"剔除 {len(removed)} 条噪音 / 过滤 {len(flagged)} 条状态可疑 / "
+        f"过滤 {len(low_rel)} 条标题不匹配"
     )
+    relevant_count = int(stats.get("count", 0) or 0)
+    if relevant_count > 0:
+        relevant_median = float(stats.get("median", 0) or 0)
+        relevant_min = float(stats.get("min", 0) or 0)
+        relevant_max = float(stats.get("max", 0) or 0)
+        lines.append(f"   数据来源：{raw_count} 平台原始召回 → {filter_summary}")
+        lines.append(
+            f"   → 相关候选 {relevant_count} 条 · 中位 ¥{relevant_median:.0f} · "
+            f"区间 ¥{relevant_min:.0f}–¥{relevant_max:.0f}（verdict 比较基准）"
+        )
+    else:
+        lines.append(
+            f"   数据来源：{raw_count} 平台原始召回 → {filter_summary} → 相关候选 0 条"
+        )
 
     return "\n".join(lines)
 
