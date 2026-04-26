@@ -48,15 +48,20 @@ SEARCH_URL_TEMPLATES: dict[str, str] = {
 }
 
 
-def _make_search_url(source: Optional[str], title: Optional[str]) -> Optional[str]:
-    """根据 source + title 生成原生平台搜索 URL（兜底 maishou 转链不准的场景）。"""
-    if not source or not title:
+def _make_search_url(source: Optional[str], query: Optional[str]) -> Optional[str]:
+    """根据 source + 用户原始 query 生成原生平台搜索 URL（兜底 maishou 转链不准）。
+
+    v0.5.3 起改用用户原始 query 而非 maishou 给的 title —— 因为 title 含
+    "AI电脑"、"台式机"、"Z1CE001AH" 等 maishou 噪音，加上括号/+号会被搜索
+    引擎按字面切词稀释。用户原始 query 干净精炼，京东/淘宝原生搜索能直接命中。
+    """
+    if not source or not query:
         return None
     template = SEARCH_URL_TEMPLATES.get(str(source))
     if not template:
         return None
-    # title 截前 50 字符避免 URL 过长，URL-encode
-    return template.format(kw=quote(title[:50]))
+    # safe="" 强制 encode 所有特殊字符（默认 safe='/' 会留下斜杠）
+    return template.format(kw=quote(query, safe=""))
 
 
 # ---------- HistoryProvider plugin interface ----------
@@ -739,7 +744,7 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
         "trap_warning": trap,
         "_meta": {
             "skill": "price-check",
-            "version": "0.5.2",
+            "version": "0.5.3",
             "history_provider": history_provider.name,
             "data_source": "internalized maishou88.com client (derived from shopmind-price-compare by xiaohaook)",
             "outlier_filter": f"price < raw_median × {OUTLIER_RATIO}",

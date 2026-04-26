@@ -4,6 +4,16 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.3] — 2026-04-26
+
+### Fixed
+- **`search_url` keyword changed from item title to user's original query**. The maishou-provided title contains noise like "AI电脑", "台式机", "Z1CE001AH", and combined punctuation/CJK chars produced over-long encoded URLs that JD/Taobao search would tokenize awkwardly. Using the user's clean query instead gives accurate native-search results.
+- `quote(query, safe="")` ensures all special characters (including `/`) are properly URL-encoded.
+
+### Added
+- **Critical UX guidance** in `references/report-template.md`: agents now must show a usage note explaining that affiliate short-links (`u.jd.com/*`, `m.tb.cn/*`) **must be opened in a logged-out / incognito window**. Logged-in users hitting these links will be flagged by the platforms' anti-self-purchase fraud system and the link will fail. The `search_url` (native search, no affiliate tracking) is the right link for logged-in shopping.
+- Why this matters: a user reported their JD affiliate link worked pre-login but errored post-login. This is a fundamental constraint of the JD/Taobao/PDD affiliate systems, not a bug we can fix in code — but agents now have to explain it.
+
 ## [0.5.2] — 2026-04-26
 
 ### Added

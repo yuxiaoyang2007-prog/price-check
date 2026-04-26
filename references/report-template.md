@@ -162,10 +162,16 @@ threshold = 0.75 (4 token query 至少命中 3 个；2-3 token query 必须全�
    匹配度 {{best_deal.relevance.score * 100}}% ({{best_deal.relevance.matched | join('+')}}{% if best_deal.relevance.missing %} 缺 {{best_deal.relevance.missing | join('/')}}{% endif %})
    🔗 转链: {{best_deal.buy_url}}
    {% if best_deal.copy_cmd and best_deal.copy_cmd != best_deal.buy_url %}📋 淘口令: {{best_deal.copy_cmd}}{% endif %}
-   {% if best_deal.search_url %}🔍 原生搜索（兜底）: {{best_deal.search_url}}{% endif %}
+   {% if best_deal.search_url %}🔍 原生搜索（兜底，登录后也能用）: {{best_deal.search_url}}{% endif %}
 {% else %}
    （信任层 + 相关性层全过滤后无可信候选）
 {% endif %}
+
+> ⚠️ **重要使用说明**：上面的 🔗 转链是**联盟推广短链**（淘宝/天猫/京东/拼多多 通用规则）：
+> - **必须在未登录浏览器（或隐身窗口）打开**，能正常进商品页
+> - **登录账号后再点击会报"链接失效/参数错误"** —— 这是各电商联盟的反作弊机制（防自购返佣）
+> - 用户实际购买流程：先在未登录浏览器打开转链 → 看到商品页确认是要买的 → 再用购物 App 直接搜索同款下单
+> - 如果嫌麻烦，直接用 🔍 原生搜索 链接：无推广追踪、登录后照样能用、可以直接下单
 
 📊 全网前 3 名候选 + 直链
 {% set excluded_ids = (removed_outliers + flagged_items + low_relevance_items) | map(attribute='goodsId') | list %}
@@ -229,7 +235,7 @@ threshold = 0.75 (4 token query 至少命中 3 个；2-3 token query 必须全�
 
 1. 用户问"X 多少钱值得买" / "X 哪里买" / 触发词命中 → 调 `uv run bin/price_check.py "<query>"`，把 stdout JSON 直接喂回来
 2. 拿到 JSON 后**必须按 6 段顺序完整渲染**（顶部警告 / best_deal / Top 3 / 历史价 / 我的建议 / 透明度）—— 哪怕用户问的 SKU 没匹配上，所有段都要给
-3. **best_deal.buy_url 永远要显示**（v0.3 已自动 enrich）。淘宝/天猫额外显示 `copy_cmd` 淘口令；**v0.5.2 起** 当 `best_deal.search_url` 非 null（即 source ∈ {1,2,3,10}）必须额外显示原生搜索链接 + 一句"教育款 / 企业专享等特殊渠道转链可能不准，用此兜底"。即使你判断"不建议买"，链接也要给，用户可能换 SKU 后想点
+3. **best_deal.buy_url 永远要显示**（v0.3 已自动 enrich）。淘宝/天猫额外显示 `copy_cmd` 淘口令；**v0.5.2 起** 当 `best_deal.search_url` 非 null（即 source ∈ {1,2,3,10}）必须额外显示原生搜索链接。**v0.5.3 起** 必须在 best_deal 链接段下方显示一段使用说明："转链需在未登录浏览器打开（登录后会被联盟反作弊判失效）；登录用户直接用原生搜索链接更稳"。即使你判断"不建议买"，链接也要给，用户可能换 SKU 后想点
 4. **Top 3 候选必须三层过滤 + 带链接**：去 `removed_outliers` + 去 `flagged_items` + 去 `low_relevance_items`。每条带 `[打开](buy_url)` 可点击文字
 5. **当 best_deal.relevance.missing 非空时**，必须在最顶部用 ⚠️ 警告区前置（不是隐藏在底部，是顶部！），告诉用户"SKU 不完全匹配"
 6. **`🤖 我的建议` 段**：先明示 verdict 原始值，再叠加你的综合判断。两者可以不同 —— 例如 "工具 verdict：强烈推荐 — 但因 SKU 不匹配，不建议直接采信"

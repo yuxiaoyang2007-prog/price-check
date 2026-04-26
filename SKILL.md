@@ -9,7 +9,7 @@ metadata:
       bins: ["python3", "uv"]
 ---
 
-# price-check v0.5.2
+# price-check v0.5.3
 
 ## 安装即用，飞书同步完全可选
 
