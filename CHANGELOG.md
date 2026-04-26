@@ -4,6 +4,18 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.4] — 2026-04-26 — release-fix only
+
+### Fixed (publish-side, no code change)
+- **Restore correct ClawHub display name** "price-check"。v0.6.3 发布时使用了 `/tmp/price-check-publish/` 目录但首次 `clawhub publish` 没显式指定 `--slug` / `--name`，CLI 用目录名做了默认推断，把主仓 display name 覆盖成了 "Price Check Publish"，并误创建一个孤立 slug `price-check-publish@0.6.3`。
+- v0.6.4 是纯 publish-side fix：源码与 v0.6.3 完全一致，重发时显式 `--slug price-check --name price-check`，把 display name 改回 "price-check"。
+
+### Operator note
+- 孤立 slug `price-check-publish@0.6.3` 仍存在，需要 ClawHub admin 协助删除（普通用户无 `delete` 权限）。该孤立 slug 内容与本仓 0.6.3 完全一致，不影响 `clawhub install price-check` 行为。
+
+### Why this exists
+不是设计重大改动，单纯是 publish 流程踩坑。教训写进了 [feedback_publish_public_skill_checklist](memory)：未来 `clawhub publish` 必须永远显式传 `--slug` 和 `--name`，不依赖目录名推断。
+
 ## [0.6.3] — 2026-04-26
 
 ### Fixed

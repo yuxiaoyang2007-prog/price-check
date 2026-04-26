@@ -894,7 +894,7 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
         "trap_warning": trap,
         "_meta": {
             "skill": "price-check",
-            "version": "0.6.3",
+            "version": "0.6.4",
             "history_provider": history_provider.name,
             "data_source": "internalized maishou88.com client (derived from shopmind-price-compare by xiaohaook)",
             "outlier_filter": f"price < raw_median × {OUTLIER_RATIO}",
