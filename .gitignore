@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual envs
+.venv/
+venv/
+
+# uv
+.uv-cache/
+
+# Local user data (SQLite + config) — these go to ~/.openclaw/data/price-check/, not in repo
+config.json
+*.db
+*.db-wal
+*.db-shm
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# macOS
+.DS_Store
