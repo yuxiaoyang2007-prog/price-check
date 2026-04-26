@@ -9,7 +9,21 @@ metadata:
       bins: ["python3", "uv"]
 ---
 
-# price-check v0.5.4
+# price-check v0.6.0
+
+## ⚠️ Agent 渲染硬规则（拿到 stdout JSON 时必读）
+
+**第一步永远是把 `human_report` 字段原样发给用户**。
+
+- ❌ 不要省略 human_report
+- ❌ 不要重新组织 / 翻译 / 简化 human_report 内容
+- ❌ 不要把 human_report 拆开重组成你自己的格式
+- ✅ 你**只能**在 human_report 完整发完之后追加一段「我的建议」（≤ 200 字，基于 verdict + SKU 不匹配警告 + 你的产品判断）
+- 违反这些规则 = skill 输出无效
+
+JSON 里 `_meta.agent_must_render` 字段也重复了同一条规则。
+
+CLI 用法（绕过 LLM 直出 markdown）：`uv run bin/price_check.py "X" --report`
 
 ## 安装即用，飞书同步完全可选
 

@@ -4,13 +4,18 @@
 # dependencies = ["aiohttp"]
 # ///
 """
-price-check v0.5.2 — 比价 + verdict + 购买链接（含 search_url fallback）
+price-check v0.6.0 — search-only mode（break change vs v0.5.x）
 
-vs v0.5.1：
-- v0.5.2 每个 item 增加 `search_url` 字段：当 maishou 中转短链不准时，
-  用 title 调原生平台搜索作为兜底（淘宝/京东/拼多多/1688）。
-  教育优惠款 / 企业专享款这类联盟分销弱的商品，maishou 短链可能错指
-  到首页或类似 SKU，search_url 让用户能可靠找到目标商品。
+变更：
+- 砍掉 maishou 联盟转链（buy_url / copy_cmd），只保留原生平台搜索 URL
+- 砍掉的原因：登录态用户点 u.jd.com / m.tb.cn 短链会被联盟反作弊判失效
+  + 我们也不内嵌任何推广码（道德上更干净）
+- 加 `human_report` JSON 字段：Python 直接渲染完整 markdown 报告，让 agent
+  原样发给用户即可（避免 LLM 自由发挥砍数据）
+- 加 `--report` CLI flag：直接输出 markdown 报告（不输出 JSON 噪音），
+  纯命令行使用更友好
+
+回滚：git checkout v0.5.4，或 clawhub install --version 0.5.4 price-check
 """
 from __future__ import annotations
 
@@ -302,26 +307,8 @@ async def fetch_items(
     return [_normalize_item(it, query=keyword) for it in raw_items]
 
 
-async def _enrich_with_urls(targets: list[dict[str, Any]]) -> None:
-    """并发拉 detail，把 buy_url / copy_cmd 塞进 target dict（in-place）。"""
-    if not targets:
-        return
-
-    async with aiohttp.ClientSession(headers=HEADERS) as session:
-        async def _one(t: dict[str, Any]) -> None:
-            try:
-                d = await data_layer.fetch_goods_detail(
-                    session, t.get("goodsId"), source=t.get("source", "1"),
-                )
-                t["buy_url"] = d.get("buy_url") or None
-                t["copy_cmd"] = d.get("copy_cmd") or None
-            except Exception as e:
-                print(f"[price-check] _enrich_with_urls failed for {t.get('goodsId')}: {e}",
-                      file=sys.stderr)
-                t.setdefault("buy_url", None)
-                t.setdefault("copy_cmd", None)
-
-        await asyncio.gather(*[_one(t) for t in targets])
+# v0.6.0: _enrich_with_urls 已废弃（不再调 maishou detail API 拉转链）
+# 历史可见 git checkout v0.5.4。当前只用 search_url（原生平台搜索）。
 
 
 def _normalize_item(raw: dict[str, Any], query: str = "") -> dict[str, Any]:
@@ -347,9 +334,7 @@ def _normalize_item(raw: dict[str, Any], query: str = "") -> dict[str, Any]:
         "condition_hits": cond_hits,
         "is_trusted_shop": _is_trusted_shop(shop_name),
         "relevance": _title_relevance(query, title),
-        "buy_url": None,                              # v0.3 enrich 后填（maishou 转链）
-        "copy_cmd": None,                             # 同上（淘口令）
-        "search_url": _make_search_url(source, query),  # v0.5.4: 用用户 query 而非 maishou title
+        "search_url": _make_search_url(source, query),  # v0.5.4+: 用户 query 生成原生搜索 URL
     }
 
 
@@ -495,10 +480,7 @@ def _select_best_deal(
                     "relevance": best["relevance"],
                     "goodsId": best["goodsId"],
                     "source": best["source"],
-                    "buy_url": None,                # v0.3 enrich 后填
-                    "copy_cmd": None,
-                    "search_url": best.get("search_url"),  # v0.5.2 原生搜索兜底
-                    "url": None,                     # 兼容旧字段名
+                    "search_url": best.get("search_url"),  # v0.6.0: search-only
                 },
                 flagged,
                 low_relevance,
@@ -653,6 +635,139 @@ def _safe_top_n(
     return safe[:n]
 
 
+def _render_human_report(result: dict[str, Any]) -> str:
+    """v0.6.0: Python 直接渲染完整 markdown 报告，作为 JSON 的 human_report 字段。
+
+    LLM agent 拿到 JSON 后只需把这个字符串原样发给用户即可，可以在尾部追加
+    "我的建议" 段（基于其产品判断）。这样关键信息（链接、verdict、历史价、
+    透明度）一定显示，不会被 LLM 自由发挥砍掉。
+    """
+    product = result.get("product", "")
+    verdict = result.get("verdict", "")
+    verdict_reason = result.get("verdict_reason", "")
+    best_deal = result.get("best_deal") or {}
+    stats = result.get("stats") or {}
+    stats_raw = result.get("stats_raw") or {}
+    history = result.get("history_summary") or {}
+    trap = result.get("trap_warning") or ""
+    removed = result.get("removed_outliers") or []
+    flagged = result.get("flagged_items") or []
+    low_rel = result.get("low_relevance_items") or []
+
+    excluded_ids = {x.get("goodsId") for x in (removed + flagged + low_rel)}
+    safe = sorted(
+        [x for x in (result.get("all_platforms") or []) if x.get("goodsId") not in excluded_ids],
+        key=lambda x: x.get("price", 0),
+    )
+
+    lines: list[str] = [f"🛒 比价 · {product}", ""]
+
+    # 顶部警告区
+    rel = best_deal.get("relevance") or {}
+    if best_deal and rel.get("missing"):
+        lines.extend([
+            "⚠️ **重要提醒：SKU 不完全匹配**",
+            f"   你查的是「{product}」，最划算可信价对应的实际 SKU 是「{best_deal.get('title','')[:60]}」，"
+            f"缺关键词 [{'/'.join(rel.get('missing') or [])}]。",
+            "   下方数据**仅供参考**，不能直接作为目标 SKU 的购买推荐。",
+            "   想要精准 SKU，请加更严格关键词（如 \"国行\"/\"全新\"/容量）重查。",
+            "",
+        ])
+    elif not best_deal:
+        lines.extend([
+            "⚠️ **重要提醒：本次召回不足以可信推荐**",
+            f"   {verdict_reason}",
+            "",
+        ])
+
+    # 最划算可信价
+    lines.append("🏆 最划算可信价（已过滤翻新/套装/配件/激活可疑/标题不匹配）")
+    if best_deal:
+        trusted_mark = " ✓ 可信店铺" if best_deal.get("is_trusted_shop") else ""
+        match_pct = int(rel.get("score", 0) * 100)
+        matched = "+".join(rel.get("matched") or [])
+        missing = rel.get("missing") or []
+        miss_str = f"，缺 {'/'.join(missing)}" if missing else ""
+        search_url = best_deal.get("search_url")
+
+        lines.append(
+            f"   ¥{best_deal.get('price','?')} | {best_deal.get('platform','')} / "
+            f"{best_deal.get('shopName','')}{trusted_mark}"
+        )
+        lines.append(f"   {best_deal.get('title','')}")
+        lines.append(f"   匹配度 {match_pct}% ({matched}){miss_str}")
+        if search_url:
+            lines.append(f"   🔍 在 {best_deal.get('platform','')} 搜索：{search_url}")
+        lines.append("")
+        lines.extend([
+            "> 💡 **使用方式**：复制上面的搜索链接到浏览器 / 直接在购物 App 里搜商品标题，"
+            "找到对应商品下单。本 skill 不内嵌任何推广追踪，链接登录后照样能用。",
+            "",
+        ])
+    else:
+        lines.extend(["   （信任层 + 相关性层全过滤后无可信候选）", ""])
+
+    # Top 3 候选
+    lines.append("📊 全网前 3 名候选（已三层过滤）")
+    if safe:
+        lines.append("")
+        lines.append("| # | 价格 | 平台 | 店铺 | SKU |")
+        lines.append("|---|------|------|------|-----|")
+        for i, item in enumerate(safe[:3], 1):
+            shop = item.get("shopName") or "-"
+            trusted = " ✓" if item.get("is_trusted_shop") else ""
+            title_short = (item.get("title") or "")[:40]
+            lines.append(
+                f"| {i} | ¥{item.get('price','?')} | {item.get('platform','')} | {shop}{trusted} | {title_short} |"
+            )
+        # Top 3 的搜索链接（每条单独列出）
+        for i, item in enumerate(safe[:3], 1):
+            search_url = item.get("search_url")
+            if search_url:
+                lines.append(f"  Top{i} 搜索: {search_url}")
+        lines.append("")
+    else:
+        lines.extend(["   无安全候选", ""])
+
+    # 历史价
+    deal_hist = history.get("best_deal_history") or {}
+    market_hist = history.get("market") or {}
+    lines.append(f"📈 历史价（{(history or {}).get('provider', 'noop')}）")
+    if deal_hist:
+        lines.append(
+            f"   该商品 {deal_hist.get('snapshots_count','?')} 次快照 · "
+            f"历史最低 ¥{(deal_hist.get('low') or {}).get('price','?')} | 最高 ¥{(deal_hist.get('high') or {}).get('price','?')} | 均 ¥{deal_hist.get('avg','?')}"
+        )
+        lines.append(f"   **当前处于 {deal_hist.get('current_rank','?')}**")
+    if market_hist:
+        lines.append(
+            f"   该 query 已查询 {market_hist.get('queries_count','?')} 次 · "
+            f"市场 30 日中位 ¥{market_hist.get('stats_median_30d','?')} · "
+            f"当前/中位 {market_hist.get('current_vs_30d_median','?')}"
+        )
+    if history.get("trap"):
+        lines.append(f"   ⚠️ {history['trap']}")
+    if not deal_hist and not market_hist:
+        lines.append("   本地数据不足（同 query 查 ≥3 次或同商品出现 ≥2 次后会有）")
+    lines.append("")
+
+    # 工具结论（verdict）
+    lines.append(f"🤖 工具 verdict: 「{verdict}」")
+    lines.append(f"   {verdict_reason}")
+    lines.append("")
+
+    # 透明度
+    lines.append("⚠️ 透明度")
+    if trap:
+        lines.append(f"   {trap}")
+    lines.append(
+        f"   数据来源：{stats_raw.get('count','?')} 平台原始召回；"
+        f"剔除 {len(removed)} 条噪音 / 过滤 {len(flagged)} 条状态可疑 / 过滤 {len(low_rel)} 条标题不匹配"
+    )
+
+    return "\n".join(lines)
+
+
 def _make_history_provider() -> HistoryProvider:
     """根据 config.json 选择 history provider；默认 local_db。"""
     try:
@@ -709,17 +824,8 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
         history = history_provider.get_history(query, best_deal=best_deal)
         verdict, verdict_reason = compute_verdict(best_deal, stats, history)
 
-    # v0.3 改造 A+B：并发拉 best_deal + Top 3 安全候选 的 URL
-    targets: list[dict[str, Any]] = []
-    if best_deal:
-        targets.append(best_deal)
-    safe_top = _safe_top_n(clean_items, flagged, low_relevance, n=3)
-    # safe_top[0] 跟 best_deal 可能是同一个商品，但 dict 引用不同；都拉一遍无所谓（短期缓存层会去重）
-    for it in safe_top:
-        if best_deal and it.get("goodsId") == best_deal.get("goodsId"):
-            continue
-        targets.append(it)
-    await _enrich_with_urls(targets)
+    # v0.6.0: 不再调 detail API 拉转链（联盟反作弊登录态会失效）
+    # 直接用 search_url（在 _normalize_item 已生成）
 
     trap = compute_trap_warning(
         removed, len(clean_items), threshold,
@@ -744,20 +850,28 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
         "trap_warning": trap,
         "_meta": {
             "skill": "price-check",
-            "version": "0.5.4",
+            "version": "0.6.0",
             "history_provider": history_provider.name,
             "data_source": "internalized maishou88.com client (derived from shopmind-price-compare by xiaohaook)",
             "outlier_filter": f"price < raw_median × {OUTLIER_RATIO}",
             "min_clean_samples": MIN_CLEAN,
             "relevance_threshold": RELEVANCE_THRESHOLD,
             "ambiguous_model_count": AMBIGUOUS_MODEL_COUNT,
-            "condition_classifier": "title-keyword (v0.3)",
-            "trusted_shop_classifier": "shopName-pattern (v0.3)",
+            "condition_classifier": "title-keyword (v0.6)",
+            "trusted_shop_classifier": "shopName-pattern (v0.6)",
             "suspicious_conditions": list(SUSPICIOUS_CONDITIONS),
             "duration_ms": duration_ms,
             "from_cache": False,
+            "agent_must_render": (
+                "RENDER RULE: 拿到本 JSON 后，**第一步永远是把 `human_report` 字段原样发给用户**。"
+                "不要省略 / 重新组织 / 翻译 / 简化 human_report。"
+                "你只能在 human_report 完整发完之后追加一段「我的建议」（≤200 字）。"
+            ),
         },
     }
+
+    # v0.6.0: Python 直接渲染完整 markdown，避免 LLM 自由发挥砍数据
+    result["human_report"] = _render_human_report(result)
 
     # 持久化（写库失败不影响输出）
     db.persist_query(query, source, page, result, duration_ms)
@@ -774,17 +888,22 @@ async def run(query: str, source: str = "0", page: int = 1, no_cache: bool = Fal
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="price-check v0.3.0 — 比价 + verdict + 购买链接 一体化"
+        description="price-check v0.6.0 — search-only 比价 + verdict + 历史价"
     )
     parser.add_argument("query", help="商品搜索词（中英文用空格分隔，例：'iPhone 16 Pro 256G'）")
     parser.add_argument("--source", default="0", help="平台编号（0=全部）")
     parser.add_argument("--page", type=int, default=1)
     parser.add_argument("--no-cache", action="store_true",
-                        help="忽略 30min 缓存，强制重打 shopmind API")
+                        help="忽略 30min 缓存，强制重打 maishou API")
+    parser.add_argument("--report", action="store_true",
+                        help="只输出人类可读 markdown 报告（不输出 JSON）")
     args = parser.parse_args()
 
     result = asyncio.run(run(args.query, source=args.source, page=args.page, no_cache=args.no_cache))
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.report:
+        print(result.get("human_report", ""))
+    else:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

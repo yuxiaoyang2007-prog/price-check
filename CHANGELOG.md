@@ -4,6 +4,49 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] — 2026-04-26 — BREAK CHANGE
+
+### Why this exists
+
+User reported affiliate short-links (`u.jd.com/*`, `m.tb.cn/*`) work pre-login but fail after login (the platform anti-self-purchase fraud system kicks in). Worse, even after we asked agents to display fallback `search_url` in v0.5.4, Molty kept "creatively" omitting it because LLMs are non-deterministic. Two architectural decisions:
+
+1. **Drop affiliate short-links entirely** — no more `buy_url` / `copy_cmd`. We don't embed any affiliate tracking. Users can't be misled by "this link doesn't work after login" anymore, and the skill is morally cleaner (no income-skimming on top of upstream xiaohaook's invite_code).
+2. **Take rendering away from the LLM** — Python now produces a fully-rendered `human_report` markdown string in the JSON. Agent's job is reduced to "send `human_report` verbatim, then optionally append a short '我的建议' section". This converts a non-deterministic LLM choice ("should I show search_url?") into a deterministic Python output.
+
+### Removed (BREAK CHANGE)
+- `best_deal.buy_url` field — gone
+- `best_deal.copy_cmd` field — gone (Taobao share codes)
+- `all_platforms[].buy_url` / `.copy_cmd` — gone
+- `_enrich_with_urls()` helper function — gone
+- `_data_layer.fetch_goods_detail()` is no longer called from main flow (still in module for backward compat / opt-in use)
+- Feishu Bitable columns: `best_deal链接` / `best_deal口令` / `Top2链接` / `Top3链接` — must be manually deleted from existing Bitables
+
+### Added
+- `result["human_report"]` — Python-rendered complete markdown report (warning section / best_deal + search_url / Top 3 table + search_url / history price / verdict / transparency)
+- `result["_meta"]["agent_must_render"]` — instruction string repeated inside the JSON
+- `--report` CLI flag — emit just the markdown report, no JSON
+- New Feishu Bitable columns: `best_deal搜索链接` / `Top2搜索链接` / `Top3搜索链接` (added by setup_feishu.py)
+- SKILL.md gains a "⚠️ Agent 渲染硬规则" section at the top
+
+### Migration
+
+For end users:
+
+```bash
+# Old (v0.5.x) — buy_url + copy_cmd were available
+clawhub install --version 0.5.4 price-check    # roll back if needed
+
+# New (v0.6.0)
+clawhub install price-check                     # gets latest
+
+# CLI usage (bypass LLM entirely):
+uv run ~/.openclaw/workspace/skills/price-check/bin/price_check.py "X" --report
+```
+
+For Feishu users (if you had v0.5.x setup):
+- Old data in 旧链接 columns is preserved but new rows won't fill them
+- Run `setup_feishu.py` once again to add the 3 new search_url columns
+
 ## [0.5.4] — 2026-04-26
 
 ### Fixed
