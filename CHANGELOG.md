@@ -4,6 +4,18 @@ All notable changes to price-check are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.3] — 2026-04-26
+
+### Fixed
+- **CI lint 三连红修复 + `stats` 真正落地到 human_report 透明度段**。v0.6.2 把 `stats` 算法改成 relevant_items 分布，但 `_render_human_report()` 只读不用 — `ruff` F841 把 `stats` 局部变量标成 dead variable，CI 在 v0.6.0 / v0.6.1 / v0.6.2 三个版本连续红。v0.6.3 是真正修复（不是删死代码）：把 `stats.count` / `median` / `min` / `max` 展示到透明度段，让用户能直接看到 verdict 比较基准的来源。
+
+### Changed
+- `human_report` 透明度段增加一行 "相关候选 N 条 · 中位 ¥XXX · 区间 ¥A–¥B（verdict 比较基准）"，链路完整：原始召回 → 三层过滤 → 相关候选基准 → verdict 判决。
+- 当 query 召回为空时透明度段降级为 "相关候选 0 条"。
+
+### Why this exists
+v0.6.2 commit 标题是 "stats now reflects 'relevant candidates' distribution"，但 _render_human_report 没用上这个新 stats，用户在飞书看到 verdict_reason 引用的 "比 N 平台中位数 ¥XX 低 Y%" 时无法在透明度段验证 N / ¥XX 的来源。v0.6.3 把这层数字暴露出来，让 v0.6.2 的设计意图真正落到 UX。
+
 ## [0.6.2] — 2026-04-26
 
 ### Fixed
